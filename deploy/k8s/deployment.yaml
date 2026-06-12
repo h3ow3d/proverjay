@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: proverjay
-          image: ghcr.io/h3ow3d/proverjay:fc760ae109f5039d7a0b2f06f774bdff3ea2f97d # v0.1.1
+          image: ghcr.io/h3ow3d/proverjay@sha256:7d9e9868c4d4d7ee1bed07e11ce187d584e99d522bbf73ba133a0077f73f5b9a # v0.1.1
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
