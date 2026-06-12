@@ -1,0 +1,40 @@
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: require-signed-proverjay-image
+spec:
+  validationActions:
+    - Deny
+  failurePolicy: Fail
+  webhookConfiguration:
+    timeoutSeconds: 30
+
+  matchConstraints:
+    resourceRules:
+      - apiGroups:
+          - ""
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - pods
+
+  matchImageReferences:
+    - glob: "ghcr.io/h3ow3d/proverjay*"
+
+  attestors:
+    - name: githubActionsCosign
+      cosign:
+        keyless:
+          identities:
+            - issuer: "https://token.actions.githubusercontent.com"
+              subjectRegExp: "https://github\\.com/h3ow3d/proverjay/\\.github/workflows/ci\\.yaml@refs/tags/v.*"
+        ctlog:
+          url: "https://rekor.sigstore.dev"
+
+  validations:
+    - expression: >-
+        images.containers.map(image, verifyImageSignatures(image, [attestors.githubActionsCosign])).all(result, result > 0)
+      message: "Images from ghcr.io/h3ow3d/proverjay must be signed by the trusted GitHub Actions release workflow."
