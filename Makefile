@@ -14,6 +14,19 @@ COSIGN_IDENTITY_REGEXP ?= https://github.com/h3ow3d/proverjay/.github/workflows/
 IMAGE_DIGEST ?= ghcr.io/h3ow3d/proverjay@sha256:99f085932b94b971ed28953cad33e74d2ccea1d11eaa6a59daf7ad7a8ceb425e
 SLSA_BUILDER_ID ?= https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml
 SLSA_SOURCE_URI ?= github.com/h3ow3d/proverjay
+K8S_NAMESPACE ?= proverjay
+K8S_DIR ?= deploy/k8s
+
+bootstrap: cluster-create install-kyverno k8s-deploy k8s-status k8s-test
+
+reset-cluster: cluster-delete bootstrap
+
+install-kyverno:
+	./scripts/install-kyverno.sh
+
+kyverno-status:
+	kubectl get pods -n kyverno
+	kubectl get deploy -n kyverno
 
 verify-provenance:
 	slsa-verifier verify-image \
@@ -29,7 +42,10 @@ verify-image:
 		$(IMAGE_DIGEST)
 
 k8s-deploy:
-	kubectl apply -f $(K8S_DIR)
+	kubectl apply -f $(K8S_DIR)/namespace.yaml
+	kubectl wait --for=jsonpath='{.status.phase}=Active' namespace/$(K8S_NAMESPACE) --timeout=30s
+	kubectl apply -f $(K8S_DIR)/service.yaml
+	kubectl apply -f $(K8S_DIR)/deployment.yaml
 
 k8s-status:
 	kubectl get all -n $(K8S_NAMESPACE)
