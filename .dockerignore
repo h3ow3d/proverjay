@@ -1,0 +1,10 @@
+.git
+.github
+deploy
+scripts
+README.md
+Dockerfile
+.dockerignore
+
+*.log
+.DS_Store
