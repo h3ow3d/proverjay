@@ -11,7 +11,7 @@ K8S_NAMESPACE ?= proverjay
 K8S_DIR ?= deploy/k8s
 COSIGN_ISSUER ?= https://token.actions.githubusercontent.com
 COSIGN_IDENTITY_REGEXP ?= https://github.com/h3ow3d/proverjay/.github/workflows/.*
-IMAGE_DIGEST ?= ghcr.io/h3ow3d/proverjay@sha256:7d9e9868c4d4d7ee1bed07e11ce187d584e99d522bbf73ba133a0077f73f5b9a
+IMAGE_DIGEST ?= ghcr.io/h3ow3d/proverjay@sha256:99f085932b94b971ed28953cad33e74d2ccea1d11eaa6a59daf7ad7a8ceb425e
 SLSA_BUILDER_ID ?= https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml
 SLSA_SOURCE_URI ?= github.com/h3ow3d/proverjay
 
