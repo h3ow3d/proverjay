@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 jobs:
   test:
@@ -29,15 +30,36 @@ jobs:
       - name: Run tests
         run: make test
 
+
   docker-build:
-    name: Build Docker image
+    name: Build and publish Docker image
     runs-on: ubuntu-latest
     needs: test
+
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Log in to GHCR
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
+            -u "${{ github.actor }}" \
+            --password-stdin
+
       - name: Build image
         run: |
-          make docker-build
+          docker build \
+            --build-arg VERSION=${{ github.sha }} \
+            --build-arg COMMIT=${{ github.sha }} \
+            --build-arg CREATED=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+            -t $REGISTRY/$IMAGE_NAME:${{ github.sha }} .
+
+      - name: Push image
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker push $REGISTRY/$IMAGE_NAME:${{ github.sha }}
