@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: proverjay
+  namespace: proverjay
+spec:
+  type: LoadBalancer
+  selector:
+    app: proverjay
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
