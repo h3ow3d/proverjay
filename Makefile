@@ -16,6 +16,14 @@ SLSA_BUILDER_ID ?= https://github.com/slsa-framework/slsa-github-generator/.gith
 SLSA_SOURCE_URI ?= github.com/h3ow3d/proverjay
 K8S_NAMESPACE ?= proverjay
 K8S_DIR ?= deploy/k8s
+KYVERNO_DIR ?= deploy/kyverno
+
+kyverno-apply-policies:
+	kubectl apply -f $(KYVERNO_DIR)
+
+kyverno-policy-status:
+	kubectl get clusterpolicy
+	kubectl get policyreports -A
 
 bootstrap: cluster-create install-kyverno k8s-deploy k8s-status k8s-test
 
