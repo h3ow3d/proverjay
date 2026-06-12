@@ -12,6 +12,15 @@ K8S_DIR ?= deploy/k8s
 COSIGN_ISSUER ?= https://token.actions.githubusercontent.com
 COSIGN_IDENTITY_REGEXP ?= https://github.com/h3ow3d/proverjay/.github/workflows/.*
 IMAGE_DIGEST ?= ghcr.io/h3ow3d/proverjay@sha256:7d9e9868c4d4d7ee1bed07e11ce187d584e99d522bbf73ba133a0077f73f5b9a
+SLSA_BUILDER_ID ?= https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml
+SLSA_SOURCE_URI ?= github.com/h3ow3d/proverjay
+
+verify-provenance:
+	slsa-verifier verify-image \
+		$(IMAGE_DIGEST) \
+		--source-uri $(SLSA_SOURCE_URI) \
+		--builder-id $(SLSA_BUILDER_ID)
+
 
 verify-image:
 	cosign verify \
