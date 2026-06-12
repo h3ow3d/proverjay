@@ -12,6 +12,7 @@ spec:
     metadata:
       labels:
         app: proverjay
+        app.kubernetes.io/name: proverjay
     spec:
       containers:
         - name: proverjay
