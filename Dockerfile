@@ -21,7 +21,7 @@ LABEL org.opencontainers.image.description="A small Go app for hardened supply c
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="${COMMIT}"
 LABEL org.opencontainers.image.created="${CREATED}"
-LABEL org.opencontainers.image.source="https://github.com/<your-github-user>/proverjay"
+LABEL org.opencontainers.image.source="https://github.com/h3ow3d/proverjay"
 
 RUN adduser -D -H appuser
 
