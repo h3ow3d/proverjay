@@ -3,7 +3,7 @@ kind: ClusterPolicy
 metadata:
   name: require-app-label
 spec:
-  validationFailureAction: Audit
+  validationFailureAction: Enforce
   background: true
   rules:
     - name: require-app-kubernetes-io-name
