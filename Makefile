@@ -103,33 +103,32 @@ kyverno-apply-policies:
 	kubectl apply -f $(KYVERNO_DIR)
 
 kyverno-policy-status:
-	kubectl get clusterpolicy
-	kubectl get policyreports -A
+	kubectl get imagevalidatingpolicy
+	kubectl describe imagevalidatingpolicy require-signed-proverjay-image
 
 
 # -----------------------------------------------------------------------------
 # Supply chain verification
 # -----------------------------------------------------------------------------
 
-IMAGE_DIGEST ?= ghcr.io/h3ow3d/proverjay@sha256:99f085932b94b971ed28953cad33e74d2ccea1d11eaa6a59daf7ad7a8ceb425e
+RELEASE_IMAGE ?= ghcr.io/h3ow3d/proverjay:v0.1.10
 
 COSIGN_ISSUER ?= https://token.actions.githubusercontent.com
-COSIGN_IDENTITY_REGEXP ?= https://github.com/h3ow3d/proverjay/.github/workflows/.*
-
-SLSA_BUILDER_ID ?= https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml
-SLSA_SOURCE_URI ?= github.com/h3ow3d/proverjay
+COSIGN_IDENTITY_REGEXP ?= ^https://github\.com/h3ow3d/proverjay/\.github/workflows/ci\.ya?ml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$
+SLSA_IDENTITY_REGEXP ?= ^https://github\.com/slsa-framework/slsa-github-generator/\.github/workflows/generator_container_slsa3\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$
 
 verify-image:
 	cosign verify \
 		--certificate-identity-regexp="$(COSIGN_IDENTITY_REGEXP)" \
 		--certificate-oidc-issuer="$(COSIGN_ISSUER)" \
-		$(IMAGE_DIGEST)
+		"$(RELEASE_IMAGE)"
 
 verify-provenance:
-	slsa-verifier verify-image \
-		$(IMAGE_DIGEST) \
-		--source-uri $(SLSA_SOURCE_URI) \
-		--builder-id $(SLSA_BUILDER_ID)
+	cosign verify-attestation \
+		--type slsaprovenance \
+		--certificate-identity-regexp="$(SLSA_IDENTITY_REGEXP)" \
+		--certificate-oidc-issuer="$(COSIGN_ISSUER)" \
+		"$(RELEASE_IMAGE)"
 
 verify-release: verify-image verify-provenance
 
