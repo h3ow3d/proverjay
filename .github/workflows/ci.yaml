@@ -265,8 +265,7 @@ jobs:
 
       - name: Negative policy test
         run: |
-          set +e
-          output="$(
+          if output="$(
             kubectl apply -f - <<EOF 2>&1
           apiVersion: v1
           kind: Pod
@@ -281,17 +280,13 @@ jobs:
                 ports:
                   - containerPort: 8080
           EOF
-          )"
-          status=$?
-          set -e
-
-          echo "$output"
-
-          if [ "$status" -eq 0 ]; then
+          )"; then
+            echo "$output"
             echo "Expected Kyverno to deny the unlabeled Pod"
             exit 1
           fi
 
+          echo "$output"
           echo "$output" | grep -F "app.kubernetes.io/name"
 
       - name: Debug cluster state
