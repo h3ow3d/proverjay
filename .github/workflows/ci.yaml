@@ -146,7 +146,7 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
 
-      - name: Scan image (JSON – attestation payload)
+      - name: Scan image (cosign-vuln – attestation payload)
         uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ env.IMAGE_REF }}
