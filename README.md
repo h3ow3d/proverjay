@@ -93,7 +93,7 @@ make install-kyverno
 make kyverno-apply-policies
 ```
 
-Use a known-good release from the current flow and an older release that predates provenance. At the time of writing, `v0.1.10` is a good example and `v0.1.4` is an older bad example:
+Use a known-good release from the current flow and an older release that predates provenance. Replace these example tags with the latest good release and an older pre-provenance release if newer tags exist:
 
 ```bash
 GOOD_IMAGE=ghcr.io/h3ow3d/proverjay:v0.1.10
