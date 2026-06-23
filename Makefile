@@ -121,14 +121,14 @@ verify-image:
 	cosign verify \
 		--certificate-identity-regexp="$(COSIGN_IDENTITY_REGEXP)" \
 		--certificate-oidc-issuer="$(COSIGN_ISSUER)" \
-		$(RELEASE_IMAGE)
+		"$(RELEASE_IMAGE)"
 
 verify-provenance:
 	cosign verify-attestation \
 		--type slsaprovenance \
 		--certificate-identity-regexp="$(SLSA_IDENTITY_REGEXP)" \
 		--certificate-oidc-issuer="$(COSIGN_ISSUER)" \
-		$(RELEASE_IMAGE)
+		"$(RELEASE_IMAGE)"
 
 verify-release: verify-image verify-provenance
 

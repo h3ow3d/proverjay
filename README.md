@@ -6,6 +6,8 @@
 - a keyless SLSA provenance attestation from the SLSA GitHub generator
 - a Kyverno `ImageValidatingPolicy` that requires both
 
+This demo assumes the `ghcr.io/h3ow3d/proverjay` package is readable by both the cluster and Kyverno.
+
 ## What this demo proves
 
 On semver tags (`v*.*.*`), the repository:
@@ -91,7 +93,7 @@ make install-kyverno
 make kyverno-apply-policies
 ```
 
-Use a known-good release from the current flow and an older release that predates provenance:
+Use a known-good release from the current flow and an older release that predates provenance. At the time of writing, `v0.1.10` is a good example and `v0.1.4` is an older bad example:
 
 ```bash
 GOOD_IMAGE=ghcr.io/h3ow3d/proverjay:v0.1.10
