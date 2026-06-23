@@ -195,6 +195,9 @@ jobs:
     env:
       IMAGE_REF: ${{ needs.docker-build.outputs.image }}@${{ needs.docker-build.outputs.digest }}
       TEST_NAMESPACE: proverjay
+      CLUSTER_READY_TIMEOUT: 120s
+      KYVERNO_READY_TIMEOUT: 180s
+      POLICY_SETTLE_SECONDS: "10"
 
     steps:
       - name: Checkout
@@ -215,24 +218,25 @@ jobs:
 
       - name: Create Kind cluster
         run: |
-          kind create cluster --name proverjay-ci --wait 120s
+          kind create cluster --name proverjay-ci --wait "${CLUSTER_READY_TIMEOUT}"
           kubectl cluster-info
-          kubectl wait --for=condition=Ready nodes --all --timeout=120s
+          kubectl wait --for=condition=Ready nodes --all --timeout="${CLUSTER_READY_TIMEOUT}"
 
       - name: Install Kyverno
         run: ./scripts/install-kyverno.sh
 
       - name: Wait for Kyverno controllers
         run: |
-          kubectl wait --namespace kyverno --for=condition=Available deployment --all --timeout=180s
-          kubectl wait --namespace kyverno --for=condition=Ready pod --all --timeout=180s
+          kubectl wait --namespace kyverno --for=condition=Available deployment --all --timeout="${KYVERNO_READY_TIMEOUT}"
+          kubectl wait --namespace kyverno --for=condition=Ready pod --all --timeout="${KYVERNO_READY_TIMEOUT}"
 
       - name: Apply Kyverno policies
         run: |
           kubectl apply -f deploy/kyverno
           kubectl get clusterpolicy
           kubectl get imagevalidatingpolicies
-          sleep 10
+          # Allow newly applied policies to become active in admission before submitting test Pods.
+          sleep "${POLICY_SETTLE_SECONDS}"
 
       - name: Create test namespace
         run: kubectl apply -f deploy/k8s/namespace.yaml
