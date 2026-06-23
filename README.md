@@ -31,7 +31,7 @@ This repo intentionally does **not** yet enforce:
 
 ## Release workflow
 
-The workflow in `/home/runner/work/proverjay/proverjay/.github/workflows/ci.yaml` runs on:
+The workflow in `.github/workflows/ci.yaml` runs on:
 
 - pushes to `main`
 - pull requests
@@ -77,7 +77,7 @@ make verify-provenance
 
 ## Kyverno admission policy
 
-The policy lives at `/home/runner/work/proverjay/proverjay/deploy/kyverno/require-signed-proverjay-image.yaml`.
+The policy lives at `deploy/kyverno/require-signed-proverjay-image.yaml`.
 
 It uses the modern `ImageValidatingPolicy` API and does only two checks for `ghcr.io/h3ow3d/proverjay*` images:
 
