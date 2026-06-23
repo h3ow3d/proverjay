@@ -1,0 +1,25 @@
+# This deployment intentionally fails the require-signed-proverjay-image
+# Kyverno policy. The image tag ':latest' has no cosign signature and no SLSA
+# provenance attestation, so both validations in the policy will be denied.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proverjay-unsigned
+  namespace: proverjay
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proverjay-unsigned
+  template:
+    metadata:
+      labels:
+        app: proverjay-unsigned
+        app.kubernetes.io/name: proverjay
+    spec:
+      containers:
+        - name: proverjay
+          image: ghcr.io/h3ow3d/proverjay:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
