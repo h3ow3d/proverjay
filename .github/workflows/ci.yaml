@@ -197,7 +197,7 @@ jobs:
       TEST_NAMESPACE: proverjay
       CLUSTER_READY_TIMEOUT: 120s
       KYVERNO_READY_TIMEOUT: 180s
-      POLICY_SETTLE_SECONDS: "10"
+      POLICY_READY_TIMEOUT: 30s
 
     steps:
       - name: Checkout
@@ -233,10 +233,11 @@ jobs:
       - name: Apply Kyverno policies
         run: |
           kubectl apply -f deploy/kyverno
+          kubectl wait --for=create clusterpolicy/require-app-label --timeout="${POLICY_READY_TIMEOUT}"
+          kubectl wait --for=create clusterpolicy/require-slsa-provenance --timeout="${POLICY_READY_TIMEOUT}"
+          kubectl wait --for=create imagevalidatingpolicy/require-signed-proverjay-image --timeout="${POLICY_READY_TIMEOUT}"
           kubectl get clusterpolicy
           kubectl get imagevalidatingpolicies
-          # Allow newly applied policies to become active in admission before submitting test Pods.
-          sleep "${POLICY_SETTLE_SECONDS}"
 
       - name: Create test namespace
         run: kubectl apply -f deploy/k8s/namespace.yaml
@@ -287,7 +288,7 @@ jobs:
           fi
 
           echo "$output"
-          echo "$output" | grep -F "app.kubernetes.io/name"
+          echo "$output" | grep -F "Pods should have the app.kubernetes.io/name label."
 
       - name: Debug cluster state
         if: failure()
