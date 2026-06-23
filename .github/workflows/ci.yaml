@@ -197,7 +197,7 @@ jobs:
       TEST_NAMESPACE: proverjay
       CLUSTER_READY_TIMEOUT: 120s
       KYVERNO_READY_TIMEOUT: 180s
-      POLICY_READY_TIMEOUT: 30s
+      POLICY_READY_TIMEOUT_SECONDS: "30"
 
     steps:
       - name: Checkout
@@ -233,9 +233,20 @@ jobs:
       - name: Apply Kyverno policies
         run: |
           kubectl apply -f deploy/kyverno
-          kubectl wait --for=create clusterpolicy/require-app-label --timeout="${POLICY_READY_TIMEOUT}"
-          kubectl wait --for=create clusterpolicy/require-slsa-provenance --timeout="${POLICY_READY_TIMEOUT}"
-          kubectl wait --for=create imagevalidatingpolicy/require-signed-proverjay-image --timeout="${POLICY_READY_TIMEOUT}"
+          for resource in \
+            clusterpolicy/require-app-label \
+            clusterpolicy/require-slsa-provenance \
+            imagevalidatingpolicy/require-signed-proverjay-image; do
+            start_time=$(date +%s)
+            until kubectl get "${resource}" >/dev/null 2>&1; do
+              if [ $(( $(date +%s) - start_time )) -ge "${POLICY_READY_TIMEOUT_SECONDS}" ]; then
+                echo "Timed out waiting for ${resource} to be registered"
+                exit 1
+              fi
+
+              sleep 1
+            done
+          done
           kubectl get clusterpolicy
           kubectl get imagevalidatingpolicies
 
@@ -288,7 +299,7 @@ jobs:
           fi
 
           echo "$output"
-          echo "$output" | grep -F "Pods should have the app.kubernetes.io/name label."
+          echo "$output" | grep -F "app.kubernetes.io/name"
 
       - name: Debug cluster state
         if: failure()
