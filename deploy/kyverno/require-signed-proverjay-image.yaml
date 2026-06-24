@@ -44,7 +44,7 @@ spec:
         .filter(image, image.startsWith('ghcr.io/h3ow3d/proverjay'))
         .map(image, verifyImageSignatures(image, [attestors.release]))
         .all(result, result > 0)
-      message: Proverjay images must be signed by the trusted release workflow.
+      message: Proverjay images must be signed by the trusted release key.
     - expression: >-
         (images.containers + images.initContainers + images.ephemeralContainers)
         .filter(image, image.startsWith('ghcr.io/h3ow3d/proverjay'))
