@@ -107,7 +107,9 @@ sed \
 
 log "Running Harbor prepare..."
 cd "$HARBOR_INSTALL_DIR"
-./prepare
+# goharbor/prepare only publishes linux/amd64 images; force that platform so
+# the prepare step works on arm64 hosts (Apple Silicon) via Rosetta/QEMU.
+DOCKER_DEFAULT_PLATFORM=linux/amd64 ./prepare
 
 log "Starting Harbor..."
 docker compose up -d
