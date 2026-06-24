@@ -34,6 +34,8 @@ fi
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+pubkey_path="${repo_root}/infra/cosign/cosign.pub"
 
 tar -xzf "$BUNDLE" -C "$workdir"
 layout_dir="$workdir/payload/oci-layout"
@@ -64,9 +66,7 @@ echo
 echo "[offline-import-harbor] Import completed: ${target_ref}"
 echo
 echo "Suggested verification commands:"
-echo "  cosign verify --certificate-oidc-issuer https://token.actions.githubusercontent.com \\"
-echo "    --certificate-identity-regexp '^https://github\\.com/h3ow3d/proverjay/\\.github/workflows/ci\\.ya?ml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$' \\"
+echo "  cosign verify --key ${pubkey_path} \\"
 echo "    ${target_ref}"
-echo "  cosign verify-attestation --type slsaprovenance --certificate-oidc-issuer https://token.actions.githubusercontent.com \\"
-echo "    --certificate-identity-regexp '^https://github\\.com/slsa-framework/slsa-github-generator/\\.github/workflows/generator_container_slsa3\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+$' \\"
+echo "  cosign verify-attestation --type slsaprovenance --key ${pubkey_path} \\"
 echo "    ${target_ref}"
