@@ -10,44 +10,92 @@ Online build side:
 Offline promotion side:
 
 1. Copy the OCI-layout tar bundle into offline environment.
-2. Import into Harbor (running in a libvirt VM).
+2. Import into Harbor (running via Docker Compose).
 3. k3d cluster pulls from Harbor only.
 4. Kyverno enforces private-registry source + signature/provenance checks.
 
 The trusted verification key used by the policies lives at `infra/cosign/cosign.pub`.
 
-## Harbor in a libvirt VM (high-level)
+## Prerequisites
 
-1. Create VM (Ubuntu/Rocky/etc) on the libvirt network.
-2. Install Docker + Docker Compose plugin.
-3. Install Harbor using official installer in HTTPS mode.
-4. Give Harbor a stable hostname and cert, for example:
-   - hostname: `harbor.proverjay.test`
-   - VM IP: `192.168.122.10`
+- Docker with Compose plugin
+- `openssl`
+- `k3d` + `kubectl`
 
-This repo assumes those values by default; adjust scripts/Make variables if different.
+## Step 1 — Generate certs and start Harbor
+
+```bash
+make harbor-setup
+```
+
+This single command:
+
+1. Generates a self-signed demo CA at `infra/harbor/harbor-ca.crt`
+2. Generates a server cert for `harbor.proverjay.test` (signed by that CA)
+3. Downloads the Harbor `v2.11.2` online installer into `infra/harbor/installer/`
+4. Writes `harbor.yml` from `infra/harbor/harbor.yml.tmpl`
+5. Starts Harbor via `docker compose up -d`
+
+To use a different Harbor version: `make harbor-setup HARBOR_VERSION=v2.12.0`
+
+## Step 2 — Add /etc/hosts entry
+
+```bash
+echo "127.0.0.1  harbor.proverjay.test" | sudo tee -a /etc/hosts
+```
+
+## Step 3 — Create Harbor project
+
+Open `https://harbor.proverjay.test` in a browser (admin / Harbor12345) and create a private project named `proverjay`.
+
+- Keep OCI artifact support enabled (required for signatures and attestations)
+- Immutable tags for released tags are recommended
+
+## Step 4 — Create the k3d cluster
+
+```bash
+make harbor-cluster-create
+```
+
+This detects the Docker bridge gateway IP so that k3d container nodes can reach the Harbor container running on the host, then creates the cluster with the right `extraHosts` entry.
+
+Override auto-detection if needed:
+
+```bash
+HARBOR_HOST_IP=172.17.0.1 make harbor-cluster-create
+```
+
+## Steps 5–7 — Kyverno, import, deploy
+
+```bash
+make install-kyverno
+make kyverno-apply-harbor-policies
+make offline-import-harbor BUNDLE=dist/proverjay-v0.1.10.oci-bundle.tar.gz
+make k8s-deploy-harbor
+make harbor-demo-status
+```
+
+## Stopping Harbor
+
+```bash
+make harbor-down
+```
 
 ## Hostname/IP assumptions used by this repo
 
 - Harbor DNS name: `harbor.proverjay.test`
-- Example VM IP: `192.168.122.10`
-- k3d Harbor config file: `infra/k3d/cluster-harbor.yaml`
-- Registry config file: `infra/k3d/registries-harbor.yaml`
-
-Update both files if your Harbor hostname/IP is different.
+- Docker bridge gateway IP: auto-detected by `scripts/harbor-cluster-create.sh`
+- k3d Harbor config: `infra/k3d/cluster-harbor-local.yaml` (generated from template)
+- Registry config: `infra/k3d/registries-harbor.yaml`
 
 ## Harbor CA certificate for k3d
 
 k3d nodes mount `infra/harbor` to `/etc/ssl/harbor`.
 
-Place Harbor CA PEM at:
+The CA is generated automatically by `make harbor-setup` at:
 
-`infra/harbor/harbor-ca.crt`
-
-Typical export from Harbor VM:
-
-```bash
-scp harbor-vm:/path/to/ca.crt /path/to/proverjay/infra/harbor/harbor-ca.crt
+```
+infra/harbor/harbor-ca.crt
 ```
 
 ## Login commands
@@ -61,19 +109,6 @@ docker login harbor.proverjay.test
 # GHCR (online side, if needed)
 oras login ghcr.io
 ```
-
-## Create Harbor project
-
-```bash
-# Harbor UI: Projects -> New Project -> Name: proverjay
-```
-
-Project settings recommended for this demo:
-
-- private project
-- immutable tags for released tags (recommended)
-- disallow vulnerable images optional for demo
-- keep OCI artifact support enabled (for signatures/attestations)
 
 ## Cosign key material
 
@@ -99,3 +134,4 @@ make offline-import-harbor \
   HARBOR_IMAGE=proverjay \
   HARBOR_TAG=v0.1.10
 ```
+

@@ -17,11 +17,11 @@ nodes:
   - role: server
     extraHosts:
       - host: harbor.proverjay.test
-        ip: 192.168.122.10
+        ip: __HARBOR_HOST_IP__
   - role: agent
     extraHosts:
       - host: harbor.proverjay.test
-        ip: 192.168.122.10
+        ip: __HARBOR_HOST_IP__
 options:
   k3d:
     wait: true

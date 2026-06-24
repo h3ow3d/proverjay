@@ -163,7 +163,7 @@ Transfer (USB/scp/sneakernet)
 
 Offline promotion side
   scripts/offline-import-harbor.sh (ORAS recursive OCI-layout import)
-    -> Harbor VM: harbor.proverjay.test/proverjay/proverjay:<tag>
+    -> Harbor (Docker Compose): harbor.proverjay.test/proverjay/proverjay:<tag>
 
 Offline runtime side
   k3d cluster (trusts Harbor CA, resolves harbor.proverjay.test)
@@ -203,14 +203,14 @@ make offline-import-harbor \
 ### k3d cluster creation (Harbor-aware)
 
 ```bash
-# ensure Harbor CA exists at infra/harbor/harbor-ca.crt
-make cluster-create-harbor
+# ensure Harbor is running (make harbor-setup) before creating the cluster
+make harbor-cluster-create
 make cluster-check
 ```
 
 Harbor-specific k3d files:
 
-- `infra/k3d/cluster-harbor.yaml`
+- `infra/k3d/cluster-harbor-local.yaml.tmpl`
 - `infra/k3d/registries-harbor.yaml`
 - `infra/harbor/README.md`
 - `infra/cosign/cosign.pub`
@@ -241,10 +241,11 @@ Use `kubectl apply --dry-run=server -f ...` pods with each image case:
 ### Troubleshooting
 
 - Harbor CA trust in k3d:
-  - ensure `infra/harbor/harbor-ca.crt` is present and valid for `harbor.proverjay.test`
+  - CA is generated automatically by `make harbor-setup` at `infra/harbor/harbor-ca.crt`
   - recreate cluster after CA updates
-- DNS/hostname mapping from k3d nodes to libvirt VM:
-  - update `extraHosts` in `infra/k3d/cluster-harbor.yaml` to correct Harbor VM IP
+- DNS/hostname mapping from k3d nodes to Harbor:
+  - `make harbor-cluster-create` auto-detects the Docker bridge gateway IP
+  - override with `HARBOR_HOST_IP=<ip> make harbor-cluster-create` if auto-detection fails
 - ORAS referrers not copied:
   - use ORAS v1.3+ and keep `oras cp --recursive` in both export/import
 - Kyverno cannot verify signatures after a key rotation:

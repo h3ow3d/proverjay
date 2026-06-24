@@ -1,0 +1,33 @@
+# Harbor configuration template for local Docker Compose demo.
+# Do not edit manually — generated from this file by scripts/harbor-setup.sh.
+# Placeholders: __HARBOR_CERT_PATH__, __HARBOR_KEY_PATH__, __HARBOR_DATA_DIR__
+
+hostname: harbor.proverjay.test
+
+https:
+  port: 443
+  certificate: __HARBOR_CERT_PATH__
+  private_key: __HARBOR_KEY_PATH__
+
+harbor_admin_password: Harbor12345
+
+database:
+  password: root123
+  max_idle_conns: 50
+  max_open_conns: 100
+
+data_volume: __HARBOR_DATA_DIR__
+
+jobservice:
+  max_job_workers: 2
+
+notification:
+  webhook_job_max_retry: 3
+
+log:
+  level: info
+  rotate_count: 50
+  rotate_size: 200m
+  location: /var/log/harbor
+
+_version: 2.11.2
