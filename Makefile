@@ -1,7 +1,7 @@
 .PHONY: \
 	test run tidy \
 	docker-build docker-run \
-	cluster-create cluster-create-harbor cluster-delete cluster-check \
+	cluster-create cluster-delete cluster-check \
 	install-kyverno kyverno-status kyverno-apply-policies kyverno-apply-harbor-policies kyverno-policy-status \
 	k8s-deploy k8s-deploy-harbor k8s-status k8s-delete k8s-test \
 	verify-image verify-provenance verify-release \
@@ -52,13 +52,9 @@ docker-run:
 
 K3D_CLUSTER ?= proverjay
 K3D_CONFIG ?= infra/k3d/cluster.yaml
-K3D_HARBOR_CONFIG ?= infra/k3d/cluster-harbor.yaml
 
 cluster-create:
 	k3d cluster create --config $(K3D_CONFIG)
-
-cluster-create-harbor:
-	k3d cluster create --config $(K3D_HARBOR_CONFIG)
 
 cluster-delete:
 	k3d cluster delete $(K3D_CLUSTER) || true
@@ -172,7 +168,7 @@ offline-demo-sanity:
 	test -x scripts/offline-import-harbor.sh
 	bash -n scripts/offline-export.sh scripts/offline-import-harbor.sh
 	python3 -c "import importlib.util,sys;\
-files=['infra/k3d/cluster-harbor.yaml','infra/k3d/registries-harbor.yaml','deploy/kyverno/require-private-harbor-source.yaml','deploy/kyverno/require-signed-proverjay-image.yaml','deploy/kyverno/require-signed-proverjay-harbor-image.yaml','deploy/k8s/deployment-harbor.yaml'];\
+files=['infra/k3d/cluster-harbor-local.yaml.tmpl','infra/k3d/registries-harbor.yaml','deploy/kyverno/require-private-harbor-source.yaml','deploy/kyverno/require-signed-proverjay-image.yaml','deploy/kyverno/require-signed-proverjay-harbor-image.yaml','deploy/k8s/deployment-harbor.yaml'];\
 spec=importlib.util.find_spec('yaml');\
 print('PyYAML not installed; skipping YAML parse check') if spec is None else None;\
 sys.exit(0) if spec is None else None;\

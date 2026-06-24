@@ -10,23 +10,19 @@ Online build side:
 Offline promotion side:
 
 1. Copy the OCI-layout tar bundle into offline environment.
-2. Import into Harbor.
+2. Import into Harbor (running via Docker Compose).
 3. k3d cluster pulls from Harbor only.
 4. Kyverno enforces private-registry source + signature/provenance checks.
 
 The trusted verification key used by the policies lives at `infra/cosign/cosign.pub`.
 
-## Option A: Harbor via Docker Compose (local laptop)
-
-Use this path when running Harbor on the same machine as k3d.
-
-### Prerequisites
+## Prerequisites
 
 - Docker with Compose plugin
 - `openssl`
 - `k3d` + `kubectl`
 
-### Step 1 — Generate certs and start Harbor
+## Step 1 — Generate certs and start Harbor
 
 ```bash
 make harbor-setup
@@ -42,20 +38,20 @@ This single command:
 
 To use a different Harbor version: `make harbor-setup HARBOR_VERSION=v2.12.0`
 
-### Step 2 — Add /etc/hosts entry
+## Step 2 — Add /etc/hosts entry
 
 ```bash
 echo "127.0.0.1  harbor.proverjay.test" | sudo tee -a /etc/hosts
 ```
 
-### Step 3 — Create Harbor project
+## Step 3 — Create Harbor project
 
 Open `https://harbor.proverjay.test` in a browser (admin / Harbor12345) and create a private project named `proverjay`.
 
 - Keep OCI artifact support enabled (required for signatures and attestations)
 - Immutable tags for released tags are recommended
 
-### Step 4 — Create the k3d cluster
+## Step 4 — Create the k3d cluster
 
 ```bash
 make harbor-cluster-create
@@ -69,9 +65,7 @@ Override auto-detection if needed:
 HARBOR_HOST_IP=172.17.0.1 make harbor-cluster-create
 ```
 
-### Steps 5–7 — Kyverno, import, deploy
-
-Continue from the main README [Kyverno policy install commands](#kyverno-policy-install-commands) section onwards:
+## Steps 5–7 — Kyverno, import, deploy
 
 ```bash
 make install-kyverno
@@ -81,52 +75,27 @@ make k8s-deploy-harbor
 make harbor-demo-status
 ```
 
-### Stopping Harbor
+## Stopping Harbor
 
 ```bash
 make harbor-down
 ```
 
----
-
-## Option B: Harbor in a libvirt VM
-
-Use this path when Harbor runs in a separate VM (the original setup).
-
-1. Create VM (Ubuntu/Rocky/etc) on the libvirt network.
-2. Install Docker + Docker Compose plugin.
-3. Install Harbor using official installer in HTTPS mode.
-4. Give Harbor a stable hostname and cert, for example:
-   - hostname: `harbor.proverjay.test`
-   - VM IP: `192.168.122.10`
-
-This repo assumes those values by default for the VM path; adjust scripts/Make variables if different.
-
----
-
 ## Hostname/IP assumptions used by this repo
 
 - Harbor DNS name: `harbor.proverjay.test`
-- VM path example IP: `192.168.122.10` (in `infra/k3d/cluster-harbor.yaml`)
-- Local Docker Compose path: Docker bridge gateway IP (auto-detected by `scripts/harbor-cluster-create.sh`)
-- k3d Harbor config (VM): `infra/k3d/cluster-harbor.yaml`
-- k3d Harbor config (local): `infra/k3d/cluster-harbor-local.yaml` (generated)
+- Docker bridge gateway IP: auto-detected by `scripts/harbor-cluster-create.sh`
+- k3d Harbor config: `infra/k3d/cluster-harbor-local.yaml` (generated from template)
 - Registry config: `infra/k3d/registries-harbor.yaml`
 
 ## Harbor CA certificate for k3d
 
 k3d nodes mount `infra/harbor` to `/etc/ssl/harbor`.
 
-For the Docker Compose path the CA is generated automatically at:
+The CA is generated automatically by `make harbor-setup` at:
 
 ```
 infra/harbor/harbor-ca.crt
-```
-
-For the VM path, export the CA from the VM:
-
-```bash
-scp harbor-vm:/path/to/ca.crt /path/to/proverjay/infra/harbor/harbor-ca.crt
 ```
 
 ## Login commands
