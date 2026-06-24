@@ -1,0 +1,46 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-private-harbor-source
+  annotations:
+    policies.kyverno.io/title: Require private Harbor source
+    policies.kyverno.io/description: >-
+      Uses ClusterPolicy for simple and reliable image source prefix checks across
+      containers, initContainers, and ephemeralContainers.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: require-private-harbor-containers
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              operations:
+                - CREATE
+                - UPDATE
+      validate:
+        message: Images must come from the private Harbor registry.
+        foreach:
+          - list: "request.object.spec.containers || []"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: NotMatches
+                    value: "^harbor\\.proverjay\\.test/proverjay/.+"
+          - list: "request.object.spec.initContainers || []"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: NotMatches
+                    value: "^harbor\\.proverjay\\.test/proverjay/.+"
+          - list: "request.object.spec.ephemeralContainers || []"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: NotMatches
+                    value: "^harbor\\.proverjay\\.test/proverjay/.+"

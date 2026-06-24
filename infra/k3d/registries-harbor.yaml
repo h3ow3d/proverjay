@@ -1,0 +1,8 @@
+mirrors:
+  "harbor.proverjay.test":
+    endpoint:
+      - "https://harbor.proverjay.test"
+configs:
+  "harbor.proverjay.test":
+    tls:
+      ca_file: /etc/ssl/harbor/harbor-ca.crt

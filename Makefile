@@ -1,10 +1,11 @@
 .PHONY: \
 	test run tidy \
 	docker-build docker-run \
-	cluster-create cluster-delete cluster-check \
-	install-kyverno kyverno-status kyverno-apply-policies kyverno-policy-status \
-	k8s-deploy k8s-status k8s-delete k8s-test \
+	cluster-create cluster-create-harbor cluster-delete cluster-check \
+	install-kyverno kyverno-status kyverno-apply-policies kyverno-apply-harbor-policies kyverno-policy-status \
+	k8s-deploy k8s-deploy-harbor k8s-status k8s-delete k8s-test \
 	verify-image verify-provenance verify-release \
+	offline-export offline-import-harbor harbor-demo-status offline-demo-sanity \
 	bootstrap reset-cluster
 
 # -----------------------------------------------------------------------------
@@ -50,9 +51,13 @@ docker-run:
 
 K3D_CLUSTER ?= proverjay
 K3D_CONFIG ?= infra/k3d/cluster.yaml
+K3D_HARBOR_CONFIG ?= infra/k3d/cluster-harbor.yaml
 
 cluster-create:
 	k3d cluster create --config $(K3D_CONFIG)
+
+cluster-create-harbor:
+	k3d cluster create --config $(K3D_HARBOR_CONFIG)
 
 cluster-delete:
 	k3d cluster delete $(K3D_CLUSTER) || true
@@ -75,6 +80,12 @@ k8s-deploy:
 	kubectl wait --for=jsonpath='{.status.phase}=Active' namespace/$(K8S_NAMESPACE) --timeout=30s
 	kubectl apply -f $(K8S_DIR)/service.yaml
 	kubectl apply -f $(K8S_DIR)/deployment.yaml
+
+k8s-deploy-harbor:
+	kubectl apply -f $(K8S_DIR)/namespace.yaml
+	kubectl wait --for=jsonpath='{.status.phase}=Active' namespace/$(K8S_NAMESPACE) --timeout=30s
+	kubectl apply -f $(K8S_DIR)/service.yaml
+	kubectl apply -f $(K8S_DIR)/deployment-harbor.yaml
 
 k8s-status:
 	kubectl get all -n $(K8S_NAMESPACE)
@@ -102,6 +113,10 @@ kyverno-status:
 kyverno-apply-policies:
 	kubectl apply -f $(KYVERNO_DIR)
 
+kyverno-apply-harbor-policies:
+	kubectl apply -f $(KYVERNO_DIR)/require-private-harbor-source.yaml
+	kubectl apply -f $(KYVERNO_DIR)/require-signed-proverjay-harbor-image.yaml
+
 kyverno-policy-status:
 	kubectl get imagevalidatingpolicy
 	kubectl describe imagevalidatingpolicy require-signed-proverjay-image
@@ -112,6 +127,13 @@ kyverno-policy-status:
 # -----------------------------------------------------------------------------
 
 RELEASE_IMAGE ?= ghcr.io/h3ow3d/proverjay:v0.1.10
+BUNDLE_DIR ?= dist
+BUNDLE ?= $(BUNDLE_DIR)/proverjay-v0.1.10.oci-bundle.tar.gz
+
+HARBOR_HOSTNAME ?= harbor.proverjay.test
+HARBOR_PROJECT ?= proverjay
+HARBOR_IMAGE ?= proverjay
+HARBOR_TAG ?= v0.1.10
 
 COSIGN_ISSUER ?= https://token.actions.githubusercontent.com
 COSIGN_IDENTITY_REGEXP ?= ^https://github\.com/h3ow3d/proverjay/\.github/workflows/ci\.ya?ml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$
@@ -131,6 +153,35 @@ verify-provenance:
 		"$(RELEASE_IMAGE)"
 
 verify-release: verify-image verify-provenance
+
+offline-export:
+	RELEASE_IMAGE="$(RELEASE_IMAGE)" BUNDLE_DIR="$(BUNDLE_DIR)" ./scripts/offline-export.sh
+
+offline-import-harbor:
+	BUNDLE="$(BUNDLE)" \
+	HARBOR_HOSTNAME="$(HARBOR_HOSTNAME)" \
+	HARBOR_PROJECT="$(HARBOR_PROJECT)" \
+	IMAGE_NAME="$(HARBOR_IMAGE)" \
+	IMAGE_TAG="$(HARBOR_TAG)" \
+	./scripts/offline-import-harbor.sh
+
+harbor-demo-status:
+	kubectl get clusterpolicy require-private-harbor-source || true
+	kubectl get imagevalidatingpolicy require-signed-proverjay-harbor-image || true
+	kubectl get all -n $(K8S_NAMESPACE)
+
+offline-demo-sanity:
+	test -x scripts/offline-export.sh
+	test -x scripts/offline-import-harbor.sh
+	bash -n scripts/offline-export.sh scripts/offline-import-harbor.sh
+	python3 -c "import importlib.util,sys;\
+files=['infra/k3d/cluster-harbor.yaml','infra/k3d/registries-harbor.yaml','deploy/kyverno/require-private-harbor-source.yaml','deploy/kyverno/require-signed-proverjay-harbor-image.yaml','deploy/k8s/deployment-harbor.yaml'];\
+spec=importlib.util.find_spec('yaml');\
+print('PyYAML not installed; skipping YAML parse check') if spec is None else None;\
+sys.exit(0) if spec is None else None;\
+import yaml;\
+[yaml.safe_load(open(f,'r',encoding='utf-8')) for f in files];\
+print('YAML parse check passed for',len(files),'files')"
 
 
 # -----------------------------------------------------------------------------
