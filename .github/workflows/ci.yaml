@@ -78,69 +78,18 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v4.1.0
 
-      - name: Restore cosign private key
-        env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-        run: |
-          test -n "${COSIGN_PRIVATE_KEY}"
-          umask 077
-          printf '%s' "${COSIGN_PRIVATE_KEY}" > "${RUNNER_TEMP}/cosign.key"
-
       - name: Sign image
-        env:
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
-          cosign sign --yes --key "${RUNNER_TEMP}/cosign.key" "${{ steps.image.outputs.image }}@${{ steps.build.outputs.digest }}"
+          cosign sign --yes "${{ steps.image.outputs.image }}@${{ steps.build.outputs.digest }}"
 
-      - name: Generate provenance predicate
-        run: |
-          cat > "${RUNNER_TEMP}/provenance.json" <<EOF
-          {
-            "buildType": "https://github.com/${{ github.repository }}/.github/workflows/ci.yaml@refs/tags/${{ github.ref_name }}",
-            "builder": {
-              "id": "https://github.com/${{ github.repository }}/.github/workflows/ci.yaml@refs/tags/${{ github.ref_name }}"
-            },
-            "invocation": {
-              "configSource": {
-                "uri": "git+https://github.com/${{ github.repository }}.git",
-                "digest": {
-                  "sha1": "${{ github.sha }}"
-                },
-                "entryPoint": ".github/workflows/ci.yaml"
-              },
-              "parameters": {
-                "image": "${{ steps.image.outputs.image }}",
-                "digest": "${{ steps.build.outputs.digest }}"
-              },
-              "environment": {
-                "githubWorkflow": "${{ github.workflow }}",
-                "githubRunId": "${{ github.run_id }}",
-                "githubRunAttempt": "${{ github.run_attempt }}",
-                "githubRef": "${{ github.ref }}"
-              }
-            },
-            "metadata": {
-              "buildInvocationId": "${{ github.run_id }}",
-              "completeness": {
-                "parameters": true,
-                "environment": false,
-                "materials": false
-              },
-              "reproducible": false
-            },
-            "materials": [
-              {
-                "uri": "git+https://github.com/${{ github.repository }}.git",
-                "digest": {
-                  "sha1": "${{ github.sha }}"
-                }
-              }
-            ]
-          }
-          EOF
-
-      - name: Attest image provenance
-        env:
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
-        run: |
-          cosign attest --yes --key "${RUNNER_TEMP}/cosign.key" --predicate "${RUNNER_TEMP}/provenance.json" --type slsaprovenance "${{ steps.image.outputs.image }}@${{ steps.build.outputs.digest }}"
+  provenance:
+    name: Generate SLSA provenance
+    needs: [release]
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      image: ${{ needs.release.outputs.image }}
+      digest: ${{ needs.release.outputs.digest }}
+      registry-username: ${{ github.actor }}
+    secrets:
+      registry-password: ${{ secrets.GITHUB_TOKEN }}
