@@ -14,6 +14,8 @@ Offline promotion side:
 3. k3d cluster pulls from Harbor only.
 4. Kyverno enforces private-registry source + signature/provenance checks.
 
+The trusted verification key used by the policies lives at `infra/cosign/cosign.pub`.
+
 ## Harbor in a libvirt VM (high-level)
 
 1. Create VM (Ubuntu/Rocky/etc) on the libvirt network.
@@ -72,6 +74,14 @@ Project settings recommended for this demo:
 - immutable tags for released tags (recommended)
 - disallow vulnerable images optional for demo
 - keep OCI artifact support enabled (for signatures/attestations)
+
+## Cosign key material
+
+- public verification key: `infra/cosign/cosign.pub`
+- private signing key: store outside git as the `COSIGN_PRIVATE_KEY` GitHub Actions secret
+- optional password: store as `COSIGN_PASSWORD`
+
+When rotating the key pair, update the public key file and redeploy both Kyverno image-validating policies before promoting new releases offline.
 
 ## Import flow
 

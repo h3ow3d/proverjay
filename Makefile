@@ -135,21 +135,17 @@ HARBOR_PROJECT ?= proverjay
 HARBOR_IMAGE ?= proverjay
 HARBOR_TAG ?= v0.1.10
 
-COSIGN_ISSUER ?= https://token.actions.githubusercontent.com
-COSIGN_IDENTITY_REGEXP ?= ^https://github\.com/h3ow3d/proverjay/\.github/workflows/ci\.ya?ml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$
-SLSA_IDENTITY_REGEXP ?= ^https://github\.com/slsa-framework/slsa-github-generator/\.github/workflows/generator_container_slsa3\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$
+COSIGN_PUBLIC_KEY ?= infra/cosign/cosign.pub
 
 verify-image:
 	cosign verify \
-		--certificate-identity-regexp="$(COSIGN_IDENTITY_REGEXP)" \
-		--certificate-oidc-issuer="$(COSIGN_ISSUER)" \
+		--key "$(COSIGN_PUBLIC_KEY)" \
 		"$(RELEASE_IMAGE)"
 
 verify-provenance:
 	cosign verify-attestation \
 		--type slsaprovenance \
-		--certificate-identity-regexp="$(SLSA_IDENTITY_REGEXP)" \
-		--certificate-oidc-issuer="$(COSIGN_ISSUER)" \
+		--key "$(COSIGN_PUBLIC_KEY)" \
 		"$(RELEASE_IMAGE)"
 
 verify-release: verify-image verify-provenance
@@ -175,7 +171,7 @@ offline-demo-sanity:
 	test -x scripts/offline-import-harbor.sh
 	bash -n scripts/offline-export.sh scripts/offline-import-harbor.sh
 	python3 -c "import importlib.util,sys;\
-files=['infra/k3d/cluster-harbor.yaml','infra/k3d/registries-harbor.yaml','deploy/kyverno/require-private-harbor-source.yaml','deploy/kyverno/require-signed-proverjay-harbor-image.yaml','deploy/k8s/deployment-harbor.yaml'];\
+files=['infra/k3d/cluster-harbor.yaml','infra/k3d/registries-harbor.yaml','deploy/kyverno/require-private-harbor-source.yaml','deploy/kyverno/require-signed-proverjay-image.yaml','deploy/kyverno/require-signed-proverjay-harbor-image.yaml','deploy/k8s/deployment-harbor.yaml'];\
 spec=importlib.util.find_spec('yaml');\
 print('PyYAML not installed; skipping YAML parse check') if spec is None else None;\
 sys.exit(0) if spec is None else None;\
