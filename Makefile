@@ -6,6 +6,7 @@
 	k8s-deploy k8s-deploy-harbor k8s-status k8s-delete k8s-test \
 	verify-image verify-provenance verify-release \
 	offline-export offline-import-harbor harbor-demo-status offline-demo-sanity \
+	harbor-setup harbor-down harbor-cluster-create \
 	bootstrap reset-cluster
 
 # -----------------------------------------------------------------------------
@@ -187,3 +188,20 @@ print('YAML parse check passed for',len(files),'files')"
 bootstrap: cluster-create install-kyverno kyverno-status k8s-deploy k8s-status k8s-test
 
 reset-cluster: cluster-delete bootstrap
+
+
+# -----------------------------------------------------------------------------
+# Harbor (local Docker Compose)
+# -----------------------------------------------------------------------------
+
+HARBOR_VERSION ?= v2.11.2
+
+harbor-setup:
+	HARBOR_VERSION="$(HARBOR_VERSION)" ./scripts/harbor-setup.sh
+
+harbor-down:
+	./scripts/harbor-down.sh
+
+harbor-cluster-create:
+	./scripts/harbor-cluster-create.sh
+

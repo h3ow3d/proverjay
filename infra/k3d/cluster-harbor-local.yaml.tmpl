@@ -1,0 +1,35 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: proverjay-harbor
+servers: 1
+agents: 1
+ports:
+  - port: 8087:80
+    nodeFilters:
+      - loadbalancer
+volumes:
+  - volume: ./infra/harbor:/etc/ssl/harbor
+    nodeFilters:
+      - server:*
+      - agent:*
+nodes:
+  - role: server
+    extraHosts:
+      - host: harbor.proverjay.test
+        ip: __HARBOR_HOST_IP__
+  - role: agent
+    extraHosts:
+      - host: harbor.proverjay.test
+        ip: __HARBOR_HOST_IP__
+options:
+  k3d:
+    wait: true
+    timeout: 90s
+    registries:
+      config: infra/k3d/registries-harbor.yaml
+  k3s:
+    extraArgs:
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*
