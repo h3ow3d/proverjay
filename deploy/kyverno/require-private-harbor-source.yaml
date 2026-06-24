@@ -3,44 +3,32 @@ kind: ClusterPolicy
 metadata:
   name: require-private-harbor-source
   annotations:
-    policies.kyverno.io/title: Require private Harbor source
+    policies.kyverno.io/title: Require Harbor Image Source
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/subject: Pod
     policies.kyverno.io/description: >-
-      Uses ClusterPolicy for simple and reliable image source prefix checks across
-      containers, initContainers, and ephemeralContainers.
+      Require all container images in the proverjay namespace to come from the
+      local Harbor registry.
 spec:
   validationFailureAction: Enforce
-  background: false
+  background: true
   rules:
-    - name: require-private-harbor-containers
+    - name: require-images-from-local-harbor
       match:
         any:
           - resources:
               kinds:
                 - Pod
-              operations:
-                - CREATE
-                - UPDATE
+              namespaces:
+                - proverjay
       validate:
-        message: Images must come from the private Harbor registry.
-        foreach:
-          - list: "request.object.spec.containers || []"
-            deny:
-              conditions:
-                any:
-                  - key: "{{ element.image }}"
-                    operator: NotMatches
-                    value: "^harbor\\.proverjay\\.test/proverjay/.+"
-          - list: "request.object.spec.initContainers || []"
-            deny:
-              conditions:
-                any:
-                  - key: "{{ element.image }}"
-                    operator: NotMatches
-                    value: "^harbor\\.proverjay\\.test/proverjay/.+"
-          - list: "request.object.spec.ephemeralContainers || []"
-            deny:
-              conditions:
-                any:
-                  - key: "{{ element.image }}"
-                    operator: NotMatches
-                    value: "^harbor\\.proverjay\\.test/proverjay/.+"
+        message: "All images in the proverjay namespace must come from harbor.proverjay.test."
+        pattern:
+          spec:
+            containers:
+              - image: "harbor.proverjay.test/*"
+            =(initContainers):
+              - image: "harbor.proverjay.test/*"
+            =(ephemeralContainers):
+              - image: "harbor.proverjay.test/*"

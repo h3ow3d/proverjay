@@ -1,35 +1,41 @@
 apiVersion: k3d.io/v1alpha5
 kind: Simple
+
 metadata:
-  name: proverjay-harbor
+  name: __K3D_CLUSTER__
+
 servers: 1
-agents: 1
+agents: 0
+
+kubeAPI:
+  hostIP: "127.0.0.1"
+  hostPort: "6445"
+
 ports:
-  - port: 8087:80
+  - port: "8087:80"
     nodeFilters:
       - loadbalancer
-volumes:
-  - volume: ./infra/harbor:/etc/ssl/harbor
-    nodeFilters:
-      - server:*
-      - agent:*
-nodes:
-  - role: server
-    extraHosts:
-      - host: harbor.proverjay.test
-        ip: __HARBOR_HOST_IP__
-  - role: agent
-    extraHosts:
-      - host: harbor.proverjay.test
-        ip: __HARBOR_HOST_IP__
+
+registries:
+  config: |
+    mirrors:
+      "__HARBOR_HOSTNAME__":
+        endpoint:
+          - "https://__HARBOR_HOSTNAME__"
+    configs:
+      "__HARBOR_HOSTNAME__":
+        tls:
+          insecure_skip_verify: true
+
+hostAliases:
+  - ip: "__HARBOR_HOST_IP__"
+    hostnames:
+      - __HARBOR_HOSTNAME__
+
 options:
   k3d:
     wait: true
-    timeout: 90s
-    registries:
-      config: infra/k3d/registries-harbor.yaml
-  k3s:
-    extraArgs:
-      - arg: --disable=traefik
-        nodeFilters:
-          - server:*
+    timeout: "120s"
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true

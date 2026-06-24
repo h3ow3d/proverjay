@@ -1,72 +1,63 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-unset CDPATH
+# offline-export.sh — export an OCI image plus referrers from a registry into
+# a compressed OCI layout bundle.
+#
+# Env vars:
+#   RELEASE_IMAGE — source image, e.g. ghcr.io/h3ow3d/proverjay:<tag>
+#   BUNDLE_DIR    — output directory, default: dist
 
-err() {
-  echo "[offline-export] $*" >&2
-  exit 1
-}
-
-command -v oras >/dev/null 2>&1 || err "oras CLI not found. Install ORAS v1.3+ first."
-
-RELEASE_IMAGE="${RELEASE_IMAGE:-ghcr.io/h3ow3d/proverjay:v0.1.10}"
+RELEASE_IMAGE="${RELEASE_IMAGE:-ghcr.io/h3ow3d/proverjay:af304bfc4159dd945dff0c086a56555f60c556a3}"
 BUNDLE_DIR="${BUNDLE_DIR:-dist}"
 
-image_path="${RELEASE_IMAGE%%[@:]*}"
-image_name="${image_path##*/}"
+log() { echo "[offline-export] $*"; }
+err() { echo "[offline-export] ERROR: $*" >&2; exit 1; }
 
-if [[ "$RELEASE_IMAGE" == *@* ]]; then
-  image_tag="${RELEASE_IMAGE##*@}"
-  image_tag="${image_tag//:/-}"
-elif [[ "$RELEASE_IMAGE" == *:* ]]; then
-  image_tag="${RELEASE_IMAGE##*:}"
-else
-  err "RELEASE_IMAGE must include a tag or digest (got: $RELEASE_IMAGE)"
-fi
+command -v oras >/dev/null 2>&1 || err "oras CLI not found. Install ORAS v1.3+ first."
+command -v tar  >/dev/null 2>&1 || err "tar is required"
+
+case "$RELEASE_IMAGE" in
+  *@sha256:*)
+    err "RELEASE_IMAGE must be tag-based for this demo bundle path, not digest-based. Got: $RELEASE_IMAGE"
+    ;;
+  *:*)
+    ;;
+  *)
+    err "RELEASE_IMAGE must include a tag. Got: $RELEASE_IMAGE"
+    ;;
+esac
+
+IMAGE_REPO="${RELEASE_IMAGE%:*}"
+IMAGE_TAG="${RELEASE_IMAGE##*:}"
+IMAGE_NAME="${IMAGE_REPO##*/}"
 
 mkdir -p "$BUNDLE_DIR"
 
-bundle_base="${image_name}-${image_tag}.oci-bundle"
-bundle_path="${BUNDLE_DIR}/${bundle_base}.tar.gz"
-checksum_path="${bundle_path}.sha256"
+BUNDLE="${BUNDLE_DIR}/${IMAGE_NAME}-${IMAGE_TAG}.oci-bundle.tar.gz"
+WORK_DIR="$(mktemp -d)"
+LAYOUT_DIR="${WORK_DIR}/layout"
 
-workdir="$(mktemp -d)"
-trap 'rm -rf "$workdir"' EXIT
+cleanup() {
+  rm -rf "$WORK_DIR"
+}
+trap cleanup EXIT
 
-layout_dir="$workdir/oci-layout"
-payload_dir="$workdir/payload"
-mkdir -p "$layout_dir" "$payload_dir"
+log "Source image: $RELEASE_IMAGE"
+log "Image name:   $IMAGE_NAME"
+log "Image tag:    $IMAGE_TAG"
+log "Bundle:       $BUNDLE"
+log "Copying image plus referrers into OCI layout..."
 
-oci_ref="${image_name}:${image_tag}"
-
-echo "[offline-export] Copying image + referrers from ${RELEASE_IMAGE}"
-oras cp --recursive \
+oras cp \
+  --recursive \
   --to-oci-layout \
-  --to-oci-layout-path "$layout_dir" \
+  --no-tty \
   "$RELEASE_IMAGE" \
-  "$oci_ref"
+  "${LAYOUT_DIR}:${IMAGE_TAG}"
 
-mv "$layout_dir" "$payload_dir/oci-layout"
-cat > "$payload_dir/metadata.env" <<META
-SOURCE_IMAGE=${RELEASE_IMAGE}
-OCI_REF=${oci_ref}
-EXPORT_TIME_UTC=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-META
+log "Creating compressed bundle..."
+tar -czf "$BUNDLE" -C "$WORK_DIR" layout
 
-tar -C "$workdir" -czf "$bundle_path" payload
-sha256sum "$bundle_path" > "$checksum_path"
-
-echo
-
-echo "[offline-export] Wrote bundle: $bundle_path"
-echo "[offline-export] Wrote checksum: $checksum_path"
-echo
-echo "Next steps:"
-echo "  1) Transfer both files to offline environment:"
-echo "       $bundle_path"
-echo "       $checksum_path"
-echo "  2) Verify checksum offline:"
-echo "       sha256sum -c $(basename "$checksum_path")"
-echo "  3) Import into Harbor:"
-echo "       BUNDLE=$(basename "$bundle_path") ./scripts/offline-import-harbor.sh"
+log "Export complete:"
+log "  $BUNDLE"

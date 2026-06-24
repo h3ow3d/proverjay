@@ -1,55 +1,98 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# harbor-cluster-create.sh — detect the Docker host IP reachable from k3d
-# container nodes, patch infra/k3d/cluster-harbor-local.yaml.tmpl with that
-# IP, and create the k3d cluster.
-#
-# Env vars (all optional):
-#   HARBOR_HOST_IP  — override auto-detected Docker host IP
+K3D_CLUSTER="${K3D_CLUSTER:-proverjay}"
+HARBOR_HOSTNAME="${HARBOR_HOSTNAME:-harbor.proverjay.test}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMPLATE="${REPO_ROOT}/infra/k3d/cluster-harbor-local.yaml.tmpl"
 GENERATED="${REPO_ROOT}/infra/k3d/cluster-harbor-local.yaml"
 
+HARBOR_CA_SOURCE="../harbor/harbor-ca.crt"
+HARBOR_CA_ABS="${REPO_ROOT}/infra/harbor/harbor-ca.crt"
+
 log() { echo "[harbor-cluster-create] $*"; }
 err() { echo "[harbor-cluster-create] ERROR: $*" >&2; exit 1; }
 
-command -v k3d    >/dev/null 2>&1 || err "k3d is required"
-command -v docker >/dev/null 2>&1 || err "docker is required"
+require_cmd() {
+  command -v "$1" >/dev/null 2>&1 || err "$1 is required"
+}
 
-# ---------------------------------------------------------------------------
-# Detect Docker host IP
-# ---------------------------------------------------------------------------
+require_cmd k3d
+require_cmd docker
+require_cmd curl
+require_cmd sed
+require_cmd grep
 
-if [[ -n "${HARBOR_HOST_IP:-}" ]]; then
-  log "Using HARBOR_HOST_IP from environment: ${HARBOR_HOST_IP}"
-else
-  # On Linux the Docker bridge gateway is reachable from inside containers.
-  HARBOR_HOST_IP=$(docker network inspect bridge \
-    --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)
+[[ -f "$TEMPLATE" ]] || err "Missing template: $TEMPLATE"
+[[ -f "$HARBOR_CA_ABS" ]] || err "Missing Harbor CA cert: $HARBOR_CA_ABS. Run make harbor-setup first."
 
-  # Fallback for Docker Desktop (macOS / Windows).
-  if [[ -z "$HARBOR_HOST_IP" ]]; then
-    HARBOR_HOST_IP=$(docker run --rm --add-host host.docker.internal:host-gateway \
-      alpine sh -c "getent hosts host.docker.internal | cut -f1 -d' '" 2>/dev/null || true)
-  fi
-
-  [[ -n "$HARBOR_HOST_IP" ]] || \
-    err "Could not auto-detect Docker host IP. Set HARBOR_HOST_IP manually and re-run."
-
-  log "Detected Docker host IP: ${HARBOR_HOST_IP}"
+if ! printf '%s' "$K3D_CLUSTER" | grep -Eq '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'; then
+  err "K3D_CLUSTER must be DNS/hostname-like. Got: $K3D_CLUSTER"
 fi
 
-# ---------------------------------------------------------------------------
-# Generate cluster config
-# ---------------------------------------------------------------------------
+log "Checking Harbor is healthy from the host..."
 
-sed "s/__HARBOR_HOST_IP__/${HARBOR_HOST_IP}/g" "$TEMPLATE" > "$GENERATED"
+curl -kfsS \
+  --connect-timeout 5 \
+  --max-time 10 \
+  "https://${HARBOR_HOSTNAME}/api/v2.0/health" \
+  | grep -q '"status":"healthy"' \
+  || err "Harbor is not healthy from the host at https://${HARBOR_HOSTNAME}"
+
+log "Resolving Docker host-gateway to a real IPv4 address..."
+
+HARBOR_HOST_IP="$(
+  docker run --rm \
+    --add-host gateway-probe:host-gateway \
+    alpine:3.20 \
+    sh -c "awk '\$2 == \"gateway-probe\" && \$1 ~ /^[0-9]+\\./ {print \$1; exit}' /etc/hosts" \
+    2>/dev/null || true
+)"
+
+if [[ -z "$HARBOR_HOST_IP" ]]; then
+  err "Could not resolve Docker host-gateway to an IPv4 address."
+fi
+
+if printf '%s' "$HARBOR_HOST_IP" | grep -q ':'; then
+  err "Resolved host-gateway to IPv6, which k3d hostAliases cannot use here: $HARBOR_HOST_IP"
+fi
+
+log "Docker host-gateway IPv4: ${HARBOR_HOST_IP}"
+
+log "Checking Harbor is reachable from a Docker container..."
+
+docker run --rm \
+  --add-host "${HARBOR_HOSTNAME}:${HARBOR_HOST_IP}" \
+  curlimages/curl:8.10.1 \
+  -kfsS \
+  --connect-timeout 5 \
+  --max-time 10 \
+  "https://${HARBOR_HOSTNAME}/api/v2.0/health" \
+  | grep -q '"status":"healthy"' \
+  || err "Harbor was not reachable from Docker using ${HARBOR_HOST_IP}"
+
+log "Generating k3d cluster config..."
+
+sed \
+  -e "s|__K3D_CLUSTER__|${K3D_CLUSTER}|g" \
+  -e "s|__HARBOR_HOSTNAME__|${HARBOR_HOSTNAME}|g" \
+  -e "s|__HARBOR_HOST_IP__|${HARBOR_HOST_IP}|g" \
+  -e "s|__HARBOR_CA_SOURCE__|${HARBOR_CA_SOURCE}|g" \
+  "$TEMPLATE" > "$GENERATED"
+
+if grep -q "__.*__" "$GENERATED"; then
+  log "Generated config still contains unresolved placeholders:"
+  grep -n "__.*__" "$GENERATED" || true
+  err "Refusing to create k3d cluster with unresolved placeholders."
+fi
+
 log "Generated cluster config: infra/k3d/cluster-harbor-local.yaml"
 
-# ---------------------------------------------------------------------------
-# Create cluster
-# ---------------------------------------------------------------------------
-
 k3d cluster create --config "$GENERATED"
+
+log "Cluster created: ${K3D_CLUSTER}"
+log ""
+log "Next checks:"
+log "  kubectl get nodes"
+log "  kubectl get pods -A"

@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: proverjay
   namespace: proverjay
+  labels:
+    app: proverjay
 spec:
   replicas: 1
   selector:
@@ -12,11 +14,12 @@ spec:
     metadata:
       labels:
         app: proverjay
-        app.kubernetes.io/name: proverjay
     spec:
+      imagePullSecrets:
+        - name: harbor-pull-secret
       containers:
         - name: proverjay
-          image: harbor.proverjay.test/proverjay/proverjay:v0.1.10
-          imagePullPolicy: Always
+          image: harbor.proverjay.test/proverjay/proverjay:af304bfc4159dd945dff0c086a56555f60c556a3
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

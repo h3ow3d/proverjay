@@ -7,3 +7,4 @@ infra/harbor/certs/
 infra/harbor/installer/
 infra/harbor/data/
 infra/k3d/cluster-harbor-local.yaml
+dist/

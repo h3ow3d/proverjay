@@ -5,8 +5,8 @@
 	install-kyverno kyverno-status kyverno-apply-policies kyverno-apply-harbor-policies kyverno-policy-status \
 	k8s-deploy k8s-deploy-harbor k8s-status k8s-delete k8s-test \
 	verify-image verify-provenance verify-release \
-	offline-export offline-import-harbor harbor-demo-status offline-demo-sanity \
-	harbor-setup harbor-down harbor-cluster-create \
+	offline-export offline-import-harbor promote-release-harbor deploy-harbor-release harbor-demo harbor-demo-status offline-demo-sanity \
+	harbor-certs harbor-cert-status harbor-setup harbor-health harbor-down harbor-cluster-create \
 	bootstrap reset-cluster
 
 # -----------------------------------------------------------------------------
@@ -26,7 +26,7 @@ tidy:
 
 
 # -----------------------------------------------------------------------------
-# Docker
+# Docker local build/dev
 # -----------------------------------------------------------------------------
 
 IMAGE_NAME ?= $(APP_NAME)
@@ -115,40 +115,71 @@ kyverno-apply-harbor-policies:
 	kubectl apply -f $(KYVERNO_DIR)/require-signed-proverjay-harbor-image.yaml
 
 kyverno-policy-status:
-	kubectl get imagevalidatingpolicy
-	kubectl describe imagevalidatingpolicy require-signed-proverjay-image
+	kubectl get clusterpolicy || true
+	kubectl get imagevalidatingpolicy || true
+	kubectl describe clusterpolicy require-private-harbor-source || true
+	kubectl describe imagevalidatingpolicy require-signed-proverjay-harbor-image || true
 
 
 # -----------------------------------------------------------------------------
 # Supply chain verification
 # -----------------------------------------------------------------------------
 
-RELEASE_IMAGE ?= ghcr.io/h3ow3d/proverjay:v0.1.10
+RELEASE_PACKAGE ?= proverjay
+RELEASE_TAG ?= af304bfc4159dd945dff0c086a56555f60c556a3
+RELEASE_IMAGE ?= ghcr.io/h3ow3d/$(RELEASE_PACKAGE):$(RELEASE_TAG)
+
 BUNDLE_DIR ?= dist
-BUNDLE ?= $(BUNDLE_DIR)/proverjay-v0.1.10.oci-bundle.tar.gz
+BUNDLE ?= $(BUNDLE_DIR)/$(RELEASE_PACKAGE)-$(RELEASE_TAG).oci-bundle.tar.gz
 
 HARBOR_HOSTNAME ?= harbor.proverjay.test
 HARBOR_PROJECT ?= proverjay
-HARBOR_IMAGE ?= proverjay
-HARBOR_TAG ?= v0.1.10
+HARBOR_IMAGE ?= $(RELEASE_PACKAGE)
+HARBOR_TAG ?= $(RELEASE_TAG)
+HARBOR_RELEASE_IMAGE ?= $(HARBOR_HOSTNAME)/$(HARBOR_PROJECT)/$(HARBOR_IMAGE):$(HARBOR_TAG)
 
-COSIGN_PUBLIC_KEY ?= infra/cosign/cosign.pub
+# Current GHCR image is keyless/certificate-signed by GitHub Actions.
+# Exact SAN observed from cosign:
+# https://github.com/h3ow3d/proverjay/.github/workflows/ci.yaml@refs/tags/v0.1.11
+COSIGN_CERT_OIDC_ISSUER ?= https://token.actions.githubusercontent.com
+COSIGN_CERT_IDENTITY ?= https://github.com/h3ow3d/proverjay/.github/workflows/ci.yaml@refs/tags/v0.1.11
+
+# Set to true once the release workflow publishes a real SLSA provenance
+# attestation for the runtime image.
+REQUIRE_PROVENANCE ?= false
 
 verify-image:
 	cosign verify \
-		--key "$(COSIGN_PUBLIC_KEY)" \
+		--certificate-oidc-issuer "$(COSIGN_CERT_OIDC_ISSUER)" \
+		--certificate-identity "$(COSIGN_CERT_IDENTITY)" \
 		"$(RELEASE_IMAGE)"
 
 verify-provenance:
 	cosign verify-attestation \
 		--type slsaprovenance \
-		--key "$(COSIGN_PUBLIC_KEY)" \
+		--certificate-oidc-issuer "$(COSIGN_CERT_OIDC_ISSUER)" \
+		--certificate-identity "$(COSIGN_CERT_IDENTITY)" \
 		"$(RELEASE_IMAGE)"
 
-verify-release: verify-image verify-provenance
+verify-release: verify-image
+	@if [ "$(REQUIRE_PROVENANCE)" = "true" ]; then \
+		$(MAKE) verify-provenance; \
+	else \
+		echo ""; \
+		echo "Skipping SLSA provenance verification because REQUIRE_PROVENANCE=false."; \
+		echo "Image signature verification passed for:"; \
+		echo "  $(RELEASE_IMAGE)"; \
+	fi
+
+
+# -----------------------------------------------------------------------------
+# GHCR -> Harbor promotion
+# -----------------------------------------------------------------------------
 
 offline-export:
-	RELEASE_IMAGE="$(RELEASE_IMAGE)" BUNDLE_DIR="$(BUNDLE_DIR)" ./scripts/offline-export.sh
+	RELEASE_IMAGE="$(RELEASE_IMAGE)" \
+	BUNDLE_DIR="$(BUNDLE_DIR)" \
+	./scripts/offline-export.sh
 
 offline-import-harbor:
 	BUNDLE="$(BUNDLE)" \
@@ -158,15 +189,33 @@ offline-import-harbor:
 	IMAGE_TAG="$(HARBOR_TAG)" \
 	./scripts/offline-import-harbor.sh
 
+promote-release-harbor: verify-release offline-export offline-import-harbor
+	@echo ""
+	@echo "Promoted verified release into Harbor:"
+	@echo "  $(RELEASE_IMAGE)"
+	@echo "  -> $(HARBOR_RELEASE_IMAGE)"
+
+deploy-harbor-release: k8s-deploy-harbor k8s-status k8s-test
+
+harbor-demo: harbor-health cluster-check install-kyverno kyverno-apply-harbor-policies promote-release-harbor deploy-harbor-release harbor-demo-status
+	@echo ""
+	@echo "Harbor demo complete:"
+	@echo "  verified GHCR release signature"
+	@echo "  promoted to Harbor"
+	@echo "  deployed from Harbor into k3d"
+	@echo "  Kyverno Harbor policies applied"
+
 harbor-demo-status:
 	kubectl get clusterpolicy require-private-harbor-source || true
 	kubectl get imagevalidatingpolicy require-signed-proverjay-harbor-image || true
-	kubectl get all -n $(K8S_NAMESPACE)
+	kubectl get all -n $(K8S_NAMESPACE) || true
 
 offline-demo-sanity:
 	test -x scripts/offline-export.sh
 	test -x scripts/offline-import-harbor.sh
-	bash -n scripts/offline-export.sh scripts/offline-import-harbor.sh
+	test -x scripts/harbor-setup.sh
+	test -x scripts/harbor-cluster-create.sh
+	bash -n scripts/offline-export.sh scripts/offline-import-harbor.sh scripts/harbor-setup.sh scripts/harbor-cluster-create.sh
 	python3 -c "import importlib.util,sys;\
 files=['infra/k3d/cluster-harbor-local.yaml.tmpl','infra/k3d/registries-harbor.yaml','deploy/kyverno/require-private-harbor-source.yaml','deploy/kyverno/require-signed-proverjay-image.yaml','deploy/kyverno/require-signed-proverjay-harbor-image.yaml','deploy/k8s/deployment-harbor.yaml'];\
 spec=importlib.util.find_spec('yaml');\
@@ -187,17 +236,41 @@ reset-cluster: cluster-delete bootstrap
 
 
 # -----------------------------------------------------------------------------
-# Harbor (local Docker Compose)
+# Harbor local Docker Compose
 # -----------------------------------------------------------------------------
 
 HARBOR_VERSION ?= v2.11.2
+HARBOR_DIR ?= infra/harbor
+HARBOR_CERT_DIR ?= $(HARBOR_DIR)/certs
+HARBOR_CERT ?= $(HARBOR_CERT_DIR)/harbor.crt
+HARBOR_KEY ?= $(HARBOR_CERT_DIR)/harbor.key
+HARBOR_CA ?= $(HARBOR_DIR)/harbor-ca.crt
 
-harbor-setup:
-	HARBOR_VERSION="$(HARBOR_VERSION)" ./scripts/harbor-setup.sh
+harbor-certs:
+	mkdir -p $(HARBOR_CERT_DIR)
+	test -f $(HARBOR_CERT) -a -f $(HARBOR_KEY) || \
+	openssl req -x509 -nodes -newkey rsa:4096 \
+		-keyout $(HARBOR_KEY) \
+		-out $(HARBOR_CERT) \
+		-days 365 \
+		-subj "/CN=$(HARBOR_HOSTNAME)" \
+		-addext "subjectAltName=DNS:$(HARBOR_HOSTNAME)"
+
+harbor-cert-status:
+	ls -l $(HARBOR_CERT_DIR) || true
+	test -f $(HARBOR_CERT) && openssl x509 -in $(HARBOR_CERT) -noout -subject -issuer -dates || true
+	test -f $(HARBOR_CA) && openssl x509 -in $(HARBOR_CA) -noout -subject -issuer -dates || true
+
+harbor-setup: harbor-certs
+	HARBOR_VERSION="$(HARBOR_VERSION)" \
+	HARBOR_HOSTNAME="$(HARBOR_HOSTNAME)" \
+	./scripts/harbor-setup.sh
+
+harbor-health:
+	curl -kfsS https://$\(HARBOR_HOSTNAME\)/api/v2.0/health
 
 harbor-down:
 	./scripts/harbor-down.sh
 
 harbor-cluster-create:
 	./scripts/harbor-cluster-create.sh
-

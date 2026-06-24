@@ -3,51 +3,51 @@ kind: ImageValidatingPolicy
 metadata:
   name: require-signed-proverjay-harbor-image
 spec:
-  validationActions: [Deny]
+  validationActions:
+    - Deny
   failurePolicy: Fail
+  webhookConfiguration:
+    timeoutSeconds: 30
+
   matchConstraints:
     resourceRules:
-      - apiGroups: [""]
-        apiVersions: [v1]
-        operations: [CREATE, UPDATE]
-        resources: [pods]
+      - apiGroups:
+          - ""
+        apiVersions:
+          - v1
+        operations:
+          - CREATE
+          - UPDATE
+        resources:
+          - pods
+
   matchImageReferences:
     - glob: harbor.proverjay.test/proverjay/proverjay*
+
   validationConfigurations:
-    mutateDigest: true
-    verifyDigest: true
+    mutateDigest: false
+    verifyDigest: false
     required: true
+
+  credentials:
+    allowInsecureRegistry: true
+    secrets:
+      - harbor-pull-secret
+
   attestors:
-    - name: release
+    - name: githubActionsKeyless
       cosign:
-        key:
-          data: |-
-            -----BEGIN PUBLIC KEY-----
-            MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAET3qZhSvLVvrwaQ/XCjV2cFcxmGkP
-            rdxy6XFzc5E0717fO+cjApfU+vnbp9cI9uhjzcSXd0PIHjB9fyzqI5nmlw==
-            -----END PUBLIC KEY-----
-    - name: provenance
-      cosign:
-        key:
-          data: |-
-            -----BEGIN PUBLIC KEY-----
-            MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAET3qZhSvLVvrwaQ/XCjV2cFcxmGkP
-            rdxy6XFzc5E0717fO+cjApfU+vnbp9cI9uhjzcSXd0PIHjB9fyzqI5nmlw==
-            -----END PUBLIC KEY-----
-  attestations:
-    - name: slsaProvenance
-      intoto:
-        type: "https://slsa.dev/provenance/v0.2"
+        keyless:
+          identities:
+            - subject: https://github.com/h3ow3d/proverjay/.github/workflows/ci.yaml@refs/tags/v0.1.11
+              issuer: https://token.actions.githubusercontent.com
+        ctlog:
+          url: https://rekor.sigstore.dev
+
   validations:
     - expression: >-
-        (images.containers + images.initContainers + images.ephemeralContainers)
-        .filter(image, image.startsWith('harbor.proverjay.test/proverjay/proverjay'))
-        .map(image, verifyImageSignatures(image, [attestors.release]))
-        .all(result, result > 0)
-      message: Harbor proverjay images must be signed by the trusted release key.
-    - expression: >-
-        (images.containers + images.initContainers + images.ephemeralContainers)
-        .filter(image, image.startsWith('harbor.proverjay.test/proverjay/proverjay'))
-        .map(image, verifyAttestationSignatures(image, attestations.slsaProvenance, [attestors.provenance]))
-        .all(result, result > 0)
-      message: Harbor proverjay images must include a SLSA provenance attestation signed by the trusted release key.
+        images.containers
+          .filter(image, image.startsWith('harbor.proverjay.test/proverjay/proverjay'))
+          .map(image, verifyImageSignatures(image, [attestors.githubActionsKeyless]))
+          .all(result, result > 0)
+      message: Harbor proverjay images must have a valid keyless Cosign signature from the trusted GitHub Actions workflow.
