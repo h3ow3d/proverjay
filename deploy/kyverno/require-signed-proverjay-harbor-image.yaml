@@ -39,7 +39,7 @@ spec:
       cosign:
         keyless:
           identities:
-            - subject: https://github.com/h3ow3d/proverjay/.github/workflows/ci.yaml@refs/tags/v0.1.11
+            - subjectRegExp: "https://github\\.com/h3ow3d/proverjay/\\.github/workflows/ci\\.yaml@refs/tags/v.*"
               issuer: https://token.actions.githubusercontent.com
         ctlog:
           url: https://rekor.sigstore.dev

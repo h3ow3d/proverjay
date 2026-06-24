@@ -1,20 +1,19 @@
-# Cosign release key
+# Cosign signing
 
-This directory contains the public key trusted by local verification commands and Kyverno policies.
+This repository uses Sigstore's keyless signing flow. Images pushed on semver tags are signed by
+the GitHub Actions release workflow using the ambient OIDC identity — no private key or secret is
+required.
 
-## Files
+## Verification identity
 
-- `cosign.pub`: public verification key committed to this repository
+- **OIDC issuer**: `https://token.actions.githubusercontent.com`
+- **Subject pattern**: `https://github.com/h3ow3d/proverjay/.github/workflows/ci.yaml@refs/tags/v.*`
 
-Do not store the matching private key in git. Keep it in GitHub Actions as the `COSIGN_PRIVATE_KEY` secret and, if applicable, store the password in `COSIGN_PASSWORD`.
+Signatures and attestations are recorded in the Sigstore transparency log at
+`https://rekor.sigstore.dev`.
 
-## Rotation
+## Legacy key pair
 
-1. Generate a new key pair with `cosign generate-key-pair`.
-2. Replace `cosign.pub` in this directory.
-3. Update the inline public key in:
-   - `deploy/kyverno/require-signed-proverjay-image.yaml`
-   - `deploy/kyverno/require-signed-proverjay-harbor-image.yaml`
-4. Deploy the updated policies before cutting new release tags.
-
-Releases signed with the older keyless flow will fail the current key-based policies.
+`cosign.pub` is the public half of the key pair that was used for signing between the initial
+key-pair migration and the revert to keyless signing. It is kept for reference only; it is no longer
+trusted by the Kyverno policies or the Makefile verification targets.

@@ -53,7 +53,8 @@ Verify the release signature:
 
 ```bash
 cosign verify \
-  --key infra/cosign/cosign.pub \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  --certificate-identity-regexp "https://github\.com/h3ow3d/proverjay/\.github/workflows/ci\.yaml@refs/tags/v.*" \
   "${IMAGE_REF}"
 ```
 
@@ -62,7 +63,8 @@ Verify the SLSA provenance attestation signature:
 ```bash
 cosign verify-attestation \
   --type slsaprovenance \
-  --key infra/cosign/cosign.pub \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  --certificate-identity-regexp "https://github\.com/h3ow3d/proverjay/\.github/workflows/ci\.yaml@refs/tags/v.*" \
   "${IMAGE_REF}"
 ```
 
@@ -75,19 +77,15 @@ make verify-provenance
 
 ## Cosign key setup
 
-The trusted public key is committed at `infra/cosign/cosign.pub`.
+Images are signed using Sigstore's keyless flow, which relies on GitHub Actions' OIDC token.
+No secrets or key files are needed. The workflow requires:
 
-Before tagging a release, add these GitHub Actions secrets:
+- `id-token: write` permission (already set at the workflow level)
+- `packages: write` permission to push signatures/attestations to GHCR
 
-- `COSIGN_PRIVATE_KEY`: the full contents of the matching `cosign.key`
-- `COSIGN_PASSWORD`: optional password used when the key pair was generated
-
-If you need to rotate the key pair:
-
-1. generate a new pair with `cosign generate-key-pair`
-2. update `infra/cosign/cosign.pub`
-3. update both Kyverno policies to trust the new public key
-4. deploy the updated policies before relying on new signed tags
+Signatures are verifiable against:
+- OIDC issuer: `https://token.actions.githubusercontent.com`
+- Subject pattern: `https://github.com/h3ow3d/proverjay/.github/workflows/ci.yaml@refs/tags/v.*`
 
 ## Kyverno admission policy
 

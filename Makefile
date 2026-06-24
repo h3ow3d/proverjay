@@ -138,38 +138,24 @@ HARBOR_IMAGE ?= $(RELEASE_PACKAGE)
 HARBOR_TAG ?= $(RELEASE_TAG)
 HARBOR_RELEASE_IMAGE ?= $(HARBOR_HOSTNAME)/$(HARBOR_PROJECT)/$(HARBOR_IMAGE):$(HARBOR_TAG)
 
-# Current GHCR image is keyless/certificate-signed by GitHub Actions.
-# Exact SAN observed from cosign:
-# https://github.com/h3ow3d/proverjay/.github/workflows/ci.yaml@refs/tags/v0.1.11
+# GHCR images are keyless/certificate-signed by GitHub Actions on semver tags.
 COSIGN_CERT_OIDC_ISSUER ?= https://token.actions.githubusercontent.com
-COSIGN_CERT_IDENTITY ?= https://github.com/h3ow3d/proverjay/.github/workflows/ci.yaml@refs/tags/v0.1.11
-
-# Set to true once the release workflow publishes a real SLSA provenance
-# attestation for the runtime image.
-REQUIRE_PROVENANCE ?= false
+COSIGN_CERT_IDENTITY_REGEXP ?= https://github\.com/h3ow3d/proverjay/\.github/workflows/ci\.yaml@refs/tags/v.*
 
 verify-image:
 	cosign verify \
 		--certificate-oidc-issuer "$(COSIGN_CERT_OIDC_ISSUER)" \
-		--certificate-identity "$(COSIGN_CERT_IDENTITY)" \
+		--certificate-identity-regexp "$(COSIGN_CERT_IDENTITY_REGEXP)" \
 		"$(RELEASE_IMAGE)"
 
 verify-provenance:
 	cosign verify-attestation \
 		--type slsaprovenance \
 		--certificate-oidc-issuer "$(COSIGN_CERT_OIDC_ISSUER)" \
-		--certificate-identity "$(COSIGN_CERT_IDENTITY)" \
+		--certificate-identity-regexp "$(COSIGN_CERT_IDENTITY_REGEXP)" \
 		"$(RELEASE_IMAGE)"
 
-verify-release: verify-image
-	@if [ "$(REQUIRE_PROVENANCE)" = "true" ]; then \
-		$(MAKE) verify-provenance; \
-	else \
-		echo ""; \
-		echo "Skipping SLSA provenance verification because REQUIRE_PROVENANCE=false."; \
-		echo "Image signature verification passed for:"; \
-		echo "  $(RELEASE_IMAGE)"; \
-	fi
+verify-release: verify-image verify-provenance
 
 
 # -----------------------------------------------------------------------------

@@ -78,19 +78,9 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v4.1.0
 
-      - name: Restore cosign private key
-        env:
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-        run: |
-          test -n "${COSIGN_PRIVATE_KEY}"
-          umask 077
-          printf '%s' "${COSIGN_PRIVATE_KEY}" > "${RUNNER_TEMP}/cosign.key"
-
       - name: Sign image
-        env:
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
-          cosign sign --yes --key "${RUNNER_TEMP}/cosign.key" "${{ steps.image.outputs.image }}@${{ steps.build.outputs.digest }}"
+          cosign sign --yes "${{ steps.image.outputs.image }}@${{ steps.build.outputs.digest }}"
 
       - name: Generate provenance predicate
         run: |
@@ -140,7 +130,5 @@ jobs:
           EOF
 
       - name: Attest image provenance
-        env:
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
-          cosign attest --yes --key "${RUNNER_TEMP}/cosign.key" --predicate "${RUNNER_TEMP}/provenance.json" --type slsaprovenance "${{ steps.image.outputs.image }}@${{ steps.build.outputs.digest }}"
+          cosign attest --yes --predicate "${RUNNER_TEMP}/provenance.json" --type slsaprovenance "${{ steps.image.outputs.image }}@${{ steps.build.outputs.digest }}"
