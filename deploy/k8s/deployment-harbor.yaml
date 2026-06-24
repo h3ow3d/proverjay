@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proverjay
+  namespace: proverjay
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: proverjay
+  template:
+    metadata:
+      labels:
+        app: proverjay
+        app.kubernetes.io/name: proverjay
+    spec:
+      containers:
+        - name: proverjay
+          image: harbor.proverjay.test/proverjay/proverjay:v0.1.10
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
