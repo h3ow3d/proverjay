@@ -4,6 +4,9 @@
 
 hostname: harbor.proverjay.test
 
+http:
+  port: 80
+
 https:
   port: 443
   certificate: __HARBOR_CERT_PATH__
@@ -26,8 +29,9 @@ notification:
 
 log:
   level: info
-  rotate_count: 50
-  rotate_size: 200m
-  location: /var/log/harbor
+  local:
+    rotate_count: 50
+    rotate_size: 200m
+    location: /var/log/harbor
 
 _version: 2.11.2
