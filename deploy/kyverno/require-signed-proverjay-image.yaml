@@ -20,20 +20,20 @@ spec:
   attestors:
     - name: release
       cosign:
-        key:
-          data: |-
-            -----BEGIN PUBLIC KEY-----
-            MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAET3qZhSvLVvrwaQ/XCjV2cFcxmGkP
-            rdxy6XFzc5E0717fO+cjApfU+vnbp9cI9uhjzcSXd0PIHjB9fyzqI5nmlw==
-            -----END PUBLIC KEY-----
+        keyless:
+          identities:
+            - subjectRegExp: "https://github\\.com/h3ow3d/proverjay/\\.github/workflows/ci\\.yaml@refs/tags/v.*"
+              issuer: https://token.actions.githubusercontent.com
+        ctlog:
+          url: https://rekor.sigstore.dev
     - name: provenance
       cosign:
-        key:
-          data: |-
-            -----BEGIN PUBLIC KEY-----
-            MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAET3qZhSvLVvrwaQ/XCjV2cFcxmGkP
-            rdxy6XFzc5E0717fO+cjApfU+vnbp9cI9uhjzcSXd0PIHjB9fyzqI5nmlw==
-            -----END PUBLIC KEY-----
+        keyless:
+          identities:
+            - subjectRegExp: "https://github\\.com/h3ow3d/proverjay/\\.github/workflows/ci\\.yaml@refs/tags/v.*"
+              issuer: https://token.actions.githubusercontent.com
+        ctlog:
+          url: https://rekor.sigstore.dev
   attestations:
     - name: slsaProvenance
       intoto:
