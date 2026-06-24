@@ -93,3 +93,98 @@ jobs:
       registry-username: ${{ github.actor }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-cosign-slsa-attestation:
+    name: Publish Cosign-readable SLSA attestation
+    runs-on: ubuntu-latest
+    needs: [release, provenance]
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      actions: read
+
+    env:
+      EXPECTED_SLSA_BUILDER: https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@refs/tags/v2.1.0
+      EXPECTED_SLSA_BUILD_TYPE: https://github.com/slsa-framework/slsa-github-generator/container@v1
+      EXPECTED_WORKFLOW_ENTRYPOINT: .github/workflows/ci.yaml
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.0
+
+      - name: Install slsa-verifier
+        uses: slsa-framework/slsa-verifier/actions/installer@v2.7.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify SLSA provenance and publish Cosign attestation
+        env:
+          IMAGE: ${{ needs.release.outputs.image }}
+          DIGEST: ${{ needs.release.outputs.digest }}
+          SOURCE_URI: github.com/${{ github.repository }}
+          SOURCE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          IMAGE_BY_DIGEST="${IMAGE}@${DIGEST}"
+
+          echo "Verifying original SLSA generator provenance:"
+          echo "  image:      ${IMAGE_BY_DIGEST}"
+          echo "  source-uri: ${SOURCE_URI}"
+          echo "  source-tag: ${SOURCE_TAG}"
+
+          slsa-verifier verify-image \
+            "${IMAGE_BY_DIGEST}" \
+            --source-uri "${SOURCE_URI}" \
+            --source-tag "${SOURCE_TAG}" \
+            --print-provenance \
+            > slsa-statement.json
+
+          echo "Extracting SLSA predicate for Cosign attestation..."
+          jq '.predicate' slsa-statement.json > slsa-predicate.json
+
+          echo "Checking SLSA statement shape..."
+          jq -e '
+            ._type == "https://in-toto.io/Statement/v0.1"
+            and .predicateType == "https://slsa.dev/provenance/v0.2"
+            and (.subject | length) == 1
+            and .subject[0].name == env.IMAGE
+            and .subject[0].digest.sha256 == (env.DIGEST | sub("^sha256:"; ""))
+          ' slsa-statement.json
+
+          echo "Checking trusted SLSA builder and workflow entrypoint..."
+          jq -e '
+            .builder.id == env.EXPECTED_SLSA_BUILDER
+            and .buildType == env.EXPECTED_SLSA_BUILD_TYPE
+            and .invocation.configSource.entryPoint == env.EXPECTED_WORKFLOW_ENTRYPOINT
+            and .invocation.configSource.uri == ("git+https://" + env.SOURCE_URI + "@refs/tags/" + env.SOURCE_TAG)
+            and .invocation.configSource.digest.sha1 == env.GITHUB_SHA
+          ' slsa-predicate.json
+
+          echo "Publishing Cosign-readable SLSA attestation..."
+          cosign attest \
+            --yes \
+            --predicate slsa-predicate.json \
+            --type slsaprovenance \
+            "${IMAGE_BY_DIGEST}"
+
+          echo "Verifying newly published Cosign SLSA attestation..."
+          cosign verify-attestation \
+            --type slsaprovenance \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/ci.yaml@refs/tags/${SOURCE_TAG}" \
+            "${IMAGE_BY_DIGEST}" \
+            > cosign-slsa-attestation.jsonl
+
+          echo "Cosign-readable SLSA attestation published and verified."
